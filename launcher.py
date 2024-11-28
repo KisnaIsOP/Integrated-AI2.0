@@ -10,332 +10,495 @@ from dotenv import load_dotenv
 import threading
 import json
 import datetime
+from ttkthemes import ThemedTk
+from PIL import Image, ImageTk
+import customtkinter as ctk
+import psutil
+import random
+import colorsys
+
+class AnimatedBackground:
+    def __init__(self, parent, colors):
+        self.parent = parent
+        self.colors = colors
+        self.canvas = tk.Canvas(parent, highlightthickness=0)
+        self.canvas.pack(fill='both', expand=True)
+        
+        self.width = parent.winfo_screenwidth()
+        self.height = parent.winfo_screenheight()
+        
+        self.particles = []
+        self.create_particles()
+        self.animate_particles()
+
+    def create_particles(self):
+        for _ in range(50):
+            x = random.randint(0, self.width)
+            y = random.randint(0, self.height)
+            size = random.randint(1, 5)
+            speed = random.uniform(0.5, 2)
+            color = random.choice(self.colors)
+            particle = {
+                'x': x, 'y': y, 
+                'size': size, 
+                'speed': speed, 
+                'color': color
+            }
+            self.particles.append(particle)
+
+    def animate_particles(self):
+        self.canvas.delete('all')
+        for particle in self.particles:
+            particle['y'] += particle['speed']
+            if particle['y'] > self.height:
+                particle['y'] = 0
+                particle['x'] = random.randint(0, self.width)
+            
+            self.canvas.create_oval(
+                particle['x'], particle['y'], 
+                particle['x'] + particle['size'], 
+                particle['y'] + particle['size'], 
+                fill=particle['color'], 
+                outline=''
+            )
+        
+        self.parent.after(50, self.animate_particles)
+
+class GradientBackground:
+    def __init__(self, parent, start_color, end_color):
+        self.parent = parent
+        self.canvas = tk.Canvas(parent, highlightthickness=0)
+        self.canvas.pack(fill='both', expand=True)
+        
+        self.width = parent.winfo_screenwidth()
+        self.height = parent.winfo_screenheight()
+        
+        self.start_color = self.hex_to_rgb(start_color)
+        self.end_color = self.hex_to_rgb(end_color)
+        
+        self.create_gradient()
+
+    def hex_to_rgb(self, hex_color):
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+    def interpolate_color(self, color1, color2, factor):
+        recip = 1 - factor
+        return (
+            int(color1[0] * recip + color2[0] * factor),
+            int(color1[1] * recip + color2[1] * factor),
+            int(color1[2] * recip + color2[2] * factor)
+        )
+
+    def rgb_to_hex(self, rgb):
+        return '#{:02x}{:02x}{:02x}'.format(rgb[0], rgb[1], rgb[2])
+
+    def create_gradient(self):
+        for y in range(self.height):
+            factor = y / self.height
+            color = self.interpolate_color(self.start_color, self.end_color, factor)
+            hex_color = self.rgb_to_hex(color)
+            self.canvas.create_line(0, y, self.width, y, fill=hex_color)
 
 class AIAssistantGUI:
-    def __init__(self, root):
-        self.root = root
+    def __init__(self):
+        # Initialize with CustomTkinter
+        self.root = ctk.CTk()
         self.root.title("🤖 Integrated AI Assistant")
         self.root.geometry("1200x800")
         
-        # Set theme colors
+        # Set theme and colors
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+        
         self.colors = {
-            'bg': '#1E1E1E',            # Dark background
-            'secondary_bg': '#252526',   # Slightly lighter background
-            'accent': '#007ACC',         # Blue accent
-            'text': '#D4D4D4',          # Light gray text
-            'input_bg': '#2D2D2D',      # Input background
-            'success': '#4EC9B0',       # Success color
-            'error': '#F44747',         # Error color
-            'button_hover': '#005999'   # Button hover color
+            'primary': "#1f538d",
+            'secondary': "#14375e",
+            'accent': "#00a8e8",
+            'text': "#ffffff",
+            'text_secondary': "#a0a0a0",
+            'success': "#00b894",
+            'warning': "#fdcb6e",
+            'error': "#d63031",
+            'bg_dark': "#1e1e1e",
+            'bg_medium': "#2d2d2d",
+            'bg_light': "#363636"
         }
         
-        # Configure root window
-        self.root.configure(bg=self.colors['bg'])
+        # Create animated background
+        self.background_frame = tk.Frame(self.root)
+        self.background_frame.place(x=0, y=0, relwidth=1, relheight=1)
         
-        # Configure styles
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
+        # Choose background style
+        background_styles = [
+            lambda: AnimatedBackground(self.background_frame, 
+                [self.colors['primary'], self.colors['secondary'], self.colors['accent']]),
+            lambda: GradientBackground(self.background_frame, 
+                self.colors['bg_dark'], self.colors['bg_medium'])
+        ]
+        random.choice(background_styles)()
         
-        # Configure custom styles
-        self.style.configure(
-            'Custom.TFrame',
-            background=self.colors['bg']
+        # Configure grid
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+        
+        # Create main container with blur effect
+        self.main_container = ctk.CTkFrame(
+            self.root, 
+            fg_color=self.colors['bg_dark'],  
+            corner_radius=20,
+            bg_color='transparent'
         )
-        self.style.configure(
-            'Header.TLabel',
-            background=self.colors['bg'],
-            foreground=self.colors['text'],
-            font=('Segoe UI', 12, 'bold')
-        )
-        self.style.configure(
-            'Custom.TButton',
-            background=self.colors['accent'],
-            foreground=self.colors['text'],
-            padding=10,
-            font=('Segoe UI', 10)
-        )
-        self.style.map(
-            'Custom.TButton',
-            background=[('active', self.colors['button_hover'])]
-        )
+        self.main_container.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        self.main_container.grid_columnconfigure(0, weight=1)
+        self.main_container.grid_rowconfigure(1, weight=1)
         
-        self.setup_gui()
-        self.initialize_ai()
+        # Hover and click animations
+        self.add_hover_animations()
         
-    def setup_gui(self):
-        # Main container
-        self.main_frame = ttk.Frame(self.root, style='Custom.TFrame', padding="20")
-        self.main_frame.grid(row=0, column=0, sticky='nsew')
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        # Create header
+        self.create_header()
         
-        # Header frame
-        header_frame = ttk.Frame(self.main_frame, style='Custom.TFrame')
-        header_frame.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0, 20))
+        # Create content area
+        self.create_content_area()
         
-        # Title
-        ttk.Label(
-            header_frame,
-            text="🤖 Integrated AI Assistant",
-            style='Header.TLabel'
-        ).pack(side=tk.LEFT)
+        # Create footer
+        self.create_footer()
         
-        # Model selection
-        model_frame = ttk.Frame(header_frame, style='Custom.TFrame')
-        model_frame.pack(side=tk.RIGHT)
+        # Initialize assistant components
+        self.initialize_assistant()
         
-        ttk.Label(
-            model_frame,
-            text="AI Model:",
-            style='Header.TLabel'
-        ).pack(side=tk.LEFT, padx=(0, 10))
+        # Add typing animation to messages
+        self.setup_typing_animation()
+
+    def add_hover_animations(self):
+        def add_hover_effect(widget):
+            def on_enter(e):
+                widget.configure(fg_color=self.colors['secondary'])
+            
+            def on_leave(e):
+                widget.configure(fg_color='transparent')
+            
+            widget.bind('<Enter>', on_enter)
+            widget.bind('<Leave>', on_leave)
         
-        self.model_var = tk.StringVar(value="auto")
-        models = ["auto", "gpt-4", "gpt-3.5-turbo", "gemini-pro"]
-        model_menu = ttk.OptionMenu(
-            model_frame,
-            self.model_var,
-            "auto",
-            *models
-        )
-        model_menu.pack(side=tk.LEFT)
-        
-        # Chat display
-        self.chat_frame = ttk.Frame(self.main_frame, style='Custom.TFrame')
-        self.chat_frame.grid(row=1, column=0, columnspan=2, sticky='nsew', pady=(0, 20))
-        self.chat_frame.columnconfigure(0, weight=1)
-        self.chat_frame.rowconfigure(0, weight=1)
-        
-        self.chat_display = scrolledtext.ScrolledText(
-            self.chat_frame,
-            wrap=tk.WORD,
-            font=('Cascadia Code', 10),
-            bg=self.colors['input_bg'],
-            fg=self.colors['text'],
-            insertbackground=self.colors['text'],
-            selectbackground=self.colors['accent'],
-            relief=tk.FLAT,
-            padx=10,
-            pady=10
-        )
-        self.chat_display.grid(row=0, column=0, sticky='nsew')
-        self.chat_display.config(state=tk.DISABLED)
-        
-        # Configure chat display tags
-        self.chat_display.tag_configure('user', foreground='#569CD6', font=('Cascadia Code', 10, 'bold'))
-        self.chat_display.tag_configure('assistant', foreground='#4EC9B0', font=('Cascadia Code', 10, 'bold'))
-        self.chat_display.tag_configure('system', foreground='#CE9178', font=('Cascadia Code', 10, 'bold'))
-        self.chat_display.tag_configure('error', foreground='#F44747', font=('Cascadia Code', 10, 'bold'))
-        
-        # Input area
-        input_frame = ttk.Frame(self.main_frame, style='Custom.TFrame')
-        input_frame.grid(row=2, column=0, columnspan=2, sticky='ew')
-        input_frame.columnconfigure(0, weight=1)
-        
-        self.input_field = tk.Text(
-            input_frame,
-            wrap=tk.WORD,
-            height=4,
-            font=('Cascadia Code', 10),
-            bg=self.colors['input_bg'],
-            fg=self.colors['text'],
-            insertbackground=self.colors['text'],
-            relief=tk.FLAT,
-            padx=10,
-            pady=10
-        )
-        self.input_field.grid(row=0, column=0, sticky='ew', padx=(0, 10))
-        self.input_field.bind('<Control-Return>', lambda e: self.send_message())
-        
-        # Buttons frame
-        button_frame = ttk.Frame(input_frame, style='Custom.TFrame')
-        button_frame.grid(row=0, column=1)
-        
-        # Send button with icon
-        send_button = ttk.Button(
-            button_frame,
-            text="Send 📤",
-            command=self.send_message,
-            style='Custom.TButton'
-        )
-        send_button.pack(pady=(0, 5))
-        
-        # Clear button with icon
-        clear_button = ttk.Button(
-            button_frame,
-            text="Clear 🗑️",
-            command=self.clear_chat,
-            style='Custom.TButton'
-        )
-        clear_button.pack()
-        
-        # Feature buttons
-        feature_frame = ttk.Frame(self.main_frame, style='Custom.TFrame')
-        feature_frame.grid(row=3, column=0, columnspan=2, sticky='ew', pady=(20, 0))
-        
-        features = [
-            ("🔧 System Commands", self.toggle_system_commands),
-            ("🎤 Voice Input", self.toggle_voice_input),
-            ("🌤️ Weather Info", self.get_weather),
-            ("⚙️ Settings", self.open_settings)
+        # Add hover effects to buttons and interactive elements
+        hover_widgets = [
+            widget for widget in self.root.winfo_children() 
+            if isinstance(widget, (ctk.CTkButton, ctk.CTkFrame))
         ]
         
-        for i, (text, command) in enumerate(features):
-            btn = ttk.Button(
-                feature_frame,
-                text=text,
-                command=command,
-                style='Custom.TButton'
-            )
-            btn.grid(row=0, column=i, padx=5)
-            feature_frame.columnconfigure(i, weight=1)
+        for widget in hover_widgets:
+            add_hover_effect(widget)
+
+    def setup_typing_animation(self):
+        def typing_effect(text, speed=50):
+            for i in range(1, len(text) + 1):
+                partial_text = text[:i]
+                self.messages_area.delete('1.0', 'end')
+                self.messages_area.insert('end', partial_text)
+                self.root.update()
+                self.root.after(speed)
         
-        # Status bar
-        self.status_var = tk.StringVar(value="Ready")
-        status_bar = ttk.Label(
-            self.main_frame,
-            textvariable=self.status_var,
-            style='Header.TLabel',
-            font=('Segoe UI', 9)
-        )
-        status_bar.grid(row=4, column=0, columnspan=2, sticky='w', pady=(10, 0))
-        
-        # Configure weights
-        self.main_frame.columnconfigure(0, weight=1)
-        self.main_frame.rowconfigure(1, weight=1)
-        
-    def append_to_chat(self, sender, message, message_type='normal'):
-        self.chat_display.config(state=tk.NORMAL)
+        self.typing_effect = typing_effect
+
+    def add_message(self, sender, message):
         timestamp = datetime.datetime.now().strftime("%H:%M")
+        full_message = f"\n[{timestamp}] {sender}: {message}\n"
+        self.messages_area.insert('end', full_message)
         
-        if sender == "You":
-            self.chat_display.insert(tk.END, f"\n[{timestamp}] ", 'system')
-            self.chat_display.insert(tk.END, f"You:\n", 'user')
-            self.chat_display.insert(tk.END, f"{message}\n")
-        elif sender == "Assistant":
-            self.chat_display.insert(tk.END, f"\n[{timestamp}] ", 'system')
-            self.chat_display.insert(tk.END, f"AI Assistant:\n", 'assistant')
-            if message_type == 'error':
-                self.chat_display.insert(tk.END, f"{message}\n", 'error')
-            else:
-                self.chat_display.insert(tk.END, f"{message}\n")
-        else:
-            self.chat_display.insert(tk.END, f"\n[{timestamp}] ", 'system')
-            self.chat_display.insert(tk.END, f"{sender}:\n", 'system')
-            self.chat_display.insert(tk.END, f"{message}\n")
+        # Apply typing animation
+        self.typing_effect(full_message)
         
-        self.chat_display.see(tk.END)
-        self.chat_display.config(state=tk.DISABLED)
+        self.messages_area.see('end')
+
+    def create_header(self):
+        # Header frame with subtle animation
+        header = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 20))
         
-    def initialize_ai(self):
-        try:
-            load_dotenv()
+        # Pulsating title effect
+        title_frame = ctk.CTkFrame(header, fg_color="transparent")
+        title_frame.pack(side="left")
+        
+        title_label = ctk.CTkLabel(
+            title_frame,
+            text="Integrated AI Assistant",
+            font=("Segoe UI", 24, "bold"),
+            text_color=self.colors['text']
+        )
+        title_label.pack(side="left", padx=10)
+        
+        # Pulsating animation for title
+        def pulsate_label():
+            current_size = 24
+            def animate():
+                nonlocal current_size
+                current_size = 26 if current_size == 24 else 24
+                title_label.configure(font=("Segoe UI", current_size, "bold"))
+                self.root.after(1000, animate)
+            animate()
+        
+        pulsate_label()
+        
+        # Status indicator with breathing effect
+        self.status_frame = ctk.CTkFrame(header, fg_color=self.colors['bg_medium'])
+        self.status_frame.pack(side="right", padx=10)
+        
+        self.status_indicator = ctk.CTkLabel(
+            self.status_frame,
+            text="●",
+            font=("Segoe UI", 16),
+            text_color=self.colors['success']
+        )
+        self.status_indicator.pack(side="left", padx=5)
+        
+        # Breathing effect for status indicator
+        def breathing_effect():
+            current_opacity = 1.0
+            increasing = False
+            def animate():
+                nonlocal current_opacity, increasing
+                
+                if increasing:
+                    current_opacity += 0.1
+                    if current_opacity >= 1.0:
+                        increasing = False
+                else:
+                    current_opacity -= 0.1
+                    if current_opacity <= 0.5:
+                        increasing = True
+                
+                self.status_indicator.configure(text_color=self.hex_with_alpha(self.colors['success'], current_opacity))
+                self.root.after(100, animate)
             
-            if not os.getenv('OPENAI_API_KEY') or not os.getenv('GEMINI_API_KEY'):
-                messagebox.showerror("Error", "API keys not found. Please check your .env file.")
-                return
-            
-            self.ai = AIIntegration()
-            self.settings_manager = SettingsManager()
-            
-            self.system_commands_enabled = False
-            self.voice_input_enabled = False
-            
-            self.status_var.set("AI Assistant initialized and ready")
-            self.append_to_chat(
-                "System",
-                "🤖 Welcome to the AI Assistant!\n\n" +
-                "Features available:\n" +
-                "• Multi-model AI responses (select model above)\n" +
-                "• System commands (toggle button below)\n" +
-                "• Voice input (coming soon)\n" +
-                "• Weather information\n" +
-                "• Customizable settings\n\n" +
-                "How can I help you today?"
+            animate()
+        
+        breathing_effect()
+        
+        self.status_label = ctk.CTkLabel(
+            self.status_frame,
+            text="Active",
+            font=("Segoe UI", 12),
+            text_color=self.colors['text']
+        )
+        self.status_label.pack(side="left", padx=5)
+
+    def hex_with_alpha(self, hex_color, alpha):
+        # Convert hex to RGB with alpha
+        hex_color = hex_color.lstrip('#')
+        rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        
+        # Simulate alpha by blending with background
+        bg_color = tuple(int(self.colors['bg_dark'].lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+        
+        blended_color = tuple(
+            int(rgb[i] * alpha + bg_color[i] * (1 - alpha)) for i in range(3)
+        )
+        
+        return '#{:02x}{:02x}{:02x}'.format(*blended_color)
+
+    def create_content_area(self):
+        # Content frame
+        content = ctk.CTkFrame(self.main_container, fg_color=self.colors['bg_medium'])
+        content.grid(row=1, column=0, sticky="nsew")
+        content.grid_columnconfigure(0, weight=3)
+        content.grid_columnconfigure(1, weight=1)
+        content.grid_rowconfigure(0, weight=1)
+        
+        # Chat area
+        self.create_chat_area(content)
+        
+        # Sidebar
+        self.create_sidebar(content)
+
+    def create_chat_area(self, parent):
+        chat_frame = ctk.CTkFrame(parent, fg_color=self.colors['bg_light'])
+        chat_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        chat_frame.grid_rowconfigure(0, weight=1)
+        chat_frame.grid_columnconfigure(0, weight=1)
+        
+        # Messages area
+        self.messages_area = ctk.CTkTextbox(
+            chat_frame,
+            font=("Segoe UI", 12),
+            fg_color=self.colors['bg_light'],
+            text_color=self.colors['text'],
+            wrap="word"
+        )
+        self.messages_area.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 5))
+        
+        # Input area
+        input_frame = ctk.CTkFrame(chat_frame, fg_color="transparent")
+        input_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(5, 10))
+        input_frame.grid_columnconfigure(0, weight=1)
+        
+        self.input_field = ctk.CTkEntry(
+            input_frame,
+            placeholder_text="Type your message here...",
+            font=("Segoe UI", 12),
+            height=40
+        )
+        self.input_field.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        
+        send_button = ctk.CTkButton(
+            input_frame,
+            text="Send",
+            font=("Segoe UI", 12),
+            width=100,
+            height=40,
+            command=self.send_message
+        )
+        send_button.grid(row=0, column=1)
+        
+        mic_button = ctk.CTkButton(
+            input_frame,
+            text="🎤",
+            font=("Segoe UI", 16),
+            width=60,
+            height=40,
+            command=self.toggle_voice
+        )
+        mic_button.grid(row=0, column=2, padx=(10, 0))
+
+    def create_sidebar(self, parent):
+        sidebar = ctk.CTkFrame(parent, fg_color=self.colors['bg_light'])
+        sidebar.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        
+        # Settings button
+        settings_btn = ctk.CTkButton(
+            sidebar,
+            text="⚙️ Settings",
+            font=("Segoe UI", 12),
+            command=self.open_settings
+        )
+        settings_btn.pack(fill="x", padx=10, pady=10)
+        
+        # Features list
+        features_label = ctk.CTkLabel(
+            sidebar,
+            text="Features",
+            font=("Segoe UI", 14, "bold"),
+            text_color=self.colors['text']
+        )
+        features_label.pack(padx=10, pady=(20, 10))
+        
+        features = [
+            "🗣️ Voice Commands",
+            "🤖 AI Chat",
+            "📊 Data Analysis",
+            "🔍 Smart Search",
+            "⚡ System Control",
+            "🌐 Web Integration"
+        ]
+        
+        for feature in features:
+            feature_btn = ctk.CTkButton(
+                sidebar,
+                text=feature,
+                font=("Segoe UI", 12),
+                fg_color="transparent",
+                hover_color=self.colors['bg_medium'],
+                anchor="w"
             )
-            
+            feature_btn.pack(fill="x", padx=10, pady=2)
+        
+        # System stats
+        stats_frame = ctk.CTkFrame(sidebar, fg_color=self.colors['bg_medium'])
+        stats_frame.pack(fill="x", padx=10, pady=20)
+        
+        stats_label = ctk.CTkLabel(
+            stats_frame,
+            text="System Stats",
+            font=("Segoe UI", 12, "bold"),
+            text_color=self.colors['text']
+        )
+        stats_label.pack(padx=10, pady=5)
+        
+        self.cpu_label = ctk.CTkLabel(
+            stats_frame,
+            text="CPU: 0%",
+            font=("Segoe UI", 10),
+            text_color=self.colors['text_secondary']
+        )
+        self.cpu_label.pack(padx=10, pady=2)
+        
+        self.memory_label = ctk.CTkLabel(
+            stats_frame,
+            text="Memory: 0%",
+            font=("Segoe UI", 10),
+            text_color=self.colors['text_secondary']
+        )
+        self.memory_label.pack(padx=10, pady=2)
+
+    def create_footer(self):
+        footer = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        footer.grid(row=2, column=0, sticky="ew", pady=(20, 0))
+        
+        # Version info
+        version_label = ctk.CTkLabel(
+            footer,
+            text="v2.0.0",
+            font=("Segoe UI", 10),
+            text_color=self.colors['text_secondary']
+        )
+        version_label.pack(side="left")
+        
+        # Status message
+        self.status_message = ctk.CTkLabel(
+            footer,
+            text="Ready",
+            font=("Segoe UI", 10),
+            text_color=self.colors['text_secondary']
+        )
+        self.status_message.pack(side="right")
+
+    def initialize_assistant(self):
+        # Initialize AI and other components
+        try:
+            self.ai = AIIntegration()
+            self.settings = SettingsManager()
+            self.update_status("AI Assistant initialized successfully", "success")
         except Exception as e:
-            messagebox.showerror("Initialization Error", f"Error initializing AI: {str(e)}")
-            self.status_var.set("Initialization failed")
-    
+            self.update_status(f"Error initializing AI: {str(e)}", "error")
+
     def send_message(self):
-        message = self.input_field.get("1.0", tk.END).strip()
-        if not message:
-            return
-        
-        self.input_field.delete("1.0", tk.END)
-        self.append_to_chat("You", message)
-        self.status_var.set("Processing...")
-        self.root.update_idletasks()
-        
-        def async_process():
-            async def process():
-                try:
-                    response = await self.ai.multi_model_response(
-                        message,
-                        model_preference=self.model_var.get() if self.model_var.get() != "auto" else None,
-                        system_commands_enabled=self.system_commands_enabled
-                    )
-                    
-                    if response.get("success", False):
-                        self.root.after(0, self.append_to_chat, "Assistant", response["response"])
-                    else:
-                        self.root.after(0, self.append_to_chat, "Assistant", 
-                                      response.get("error", "Unknown error occurred"), 'error')
-                        
-                except Exception as e:
-                    self.root.after(0, self.append_to_chat, "Assistant", f"Error: {str(e)}", 'error')
-                finally:
-                    self.root.after(0, self.status_var.set, "Ready")
-            
-            asyncio.run(process())
-        
-        threading.Thread(target=async_process, daemon=True).start()
-    
-    def clear_chat(self):
-        self.chat_display.config(state=tk.NORMAL)
-        self.chat_display.delete(1.0, tk.END)
-        self.chat_display.config(state=tk.DISABLED)
-        self.append_to_chat("System", "Chat cleared. How can I help you?")
-    
-    def toggle_system_commands(self):
-        self.system_commands_enabled = not self.system_commands_enabled
-        status = "enabled" if self.system_commands_enabled else "disabled"
-        self.append_to_chat("System", f"🔧 System commands {status}")
-    
-    def toggle_voice_input(self):
-        self.voice_input_enabled = not self.voice_input_enabled
-        status = "enabled" if self.voice_input_enabled else "disabled"
-        self.append_to_chat("System", f"🎤 Voice input {status}\nThis feature is coming soon!")
-    
-    def get_weather(self):
-        self.append_to_chat("System", "🌤️ Getting weather information...\nType a message with a city name to get weather info!")
-    
+        message = self.input_field.get()
+        if message:
+            self.add_message("You", message)
+            self.input_field.delete(0, 'end')
+            threading.Thread(target=self.process_message, args=(message,)).start()
+
+    def process_message(self, message):
+        try:
+            response = self.ai.process_message(message)
+            self.add_message("Assistant", response)
+        except Exception as e:
+            self.update_status(f"Error processing message: {str(e)}", "error")
+
+    def toggle_voice(self):
+        # Toggle voice recognition
+        pass
+
     def open_settings(self):
-        settings_window = tk.Toplevel(self.root)
-        settings_window.title("⚙️ Settings")
-        settings_window.geometry("500x400")
-        settings_window.configure(bg=self.colors['bg'])
-        
-        # Add settings title
-        ttk.Label(
-            settings_window,
-            text="Settings",
-            style='Header.TLabel',
-            font=('Segoe UI', 14, 'bold')
-        ).pack(pady=20)
-        
-        # Settings content placeholder
-        ttk.Label(
-            settings_window,
-            text="Settings panel coming soon!",
-            style='Header.TLabel'
-        ).pack(pady=20)
+        # Open settings dialog
+        pass
+
+    def update_status(self, message, status_type="info"):
+        colors = {
+            "success": self.colors['success'],
+            "error": self.colors['error'],
+            "warning": self.colors['warning'],
+            "info": self.colors['text_secondary']
+        }
+        self.status_message.configure(text=message, text_color=colors.get(status_type, self.colors['text']))
+
+    def run(self):
+        self.root.mainloop()
 
 def main():
-    root = tk.Tk()
-    app = AIAssistantGUI(root)
-    root.mainloop()
+    app = AIAssistantGUI()
+    app.run()
 
 if __name__ == "__main__":
     main()
