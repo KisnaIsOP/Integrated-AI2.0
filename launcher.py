@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
-from src.assistant_core.ai_integration import AIIntegration
+from src.assistant_core.ai_integration import AIIntegration, CommandType
 from src.assistant_core.settings_manager import SettingsManager
 from dotenv import load_dotenv
 import threading
@@ -454,13 +454,54 @@ class AIAssistantGUI:
         self.status_message.pack(side="right")
 
     def initialize_assistant(self):
-        # Initialize AI and other components
+        # Import AI Integration
+        from src.assistant_core.ai_integration import AIIntegration
+        
+        # Initialize AI
         try:
             self.ai = AIIntegration()
-            self.settings = SettingsManager()
-            self.update_status("AI Assistant initialized successfully", "success")
+            self.update_status("AI Assistant Initialized", "success")
         except Exception as e:
-            self.update_status(f"Error initializing AI: {str(e)}", "error")
+            self.update_status(f"AI Initialization Failed: {str(e)}", "error")
+            self.ai = None
+
+    def process_message(self, message):
+        try:
+            if not self.ai:
+                self.add_message("System", "AI not initialized. Please check settings.")
+                return
+
+            # Process message using AI
+            response = self.ai.process_message(message)
+            
+            # Add AI response to messages
+            self.add_message("Assistant", response)
+            
+            # Optional: Process any system commands
+            command_intent = self.ai.analyze_command(message)
+            if command_intent and command_intent.confidence > 0.7:
+                self.handle_system_command(command_intent)
+        
+        except Exception as e:
+            error_message = f"Error processing message: {str(e)}"
+            self.add_message("System", error_message)
+            self.update_status(error_message, "error")
+
+    def handle_system_command(self, command_intent):
+        try:
+            if command_intent.command_type == CommandType.SYSTEM:
+                if "status" in command_intent.action.lower():
+                    system_info = self.ai.system_controller.get_system_info()
+                    self.add_message("System", f"System Status:\n{system_info}")
+                
+            elif command_intent.command_type == CommandType.APPLICATION:
+                if "open" in command_intent.action.lower():
+                    app_name = command_intent.parameters.get('app_name', '')
+                    self.ai.system_controller.launch_application(app_name)
+                    self.add_message("System", f"Launched application: {app_name}")
+        
+        except Exception as e:
+            self.add_message("System", f"Error executing command: {str(e)}")
 
     def send_message(self):
         message = self.input_field.get()
@@ -468,13 +509,6 @@ class AIAssistantGUI:
             self.add_message("You", message)
             self.input_field.delete(0, 'end')
             threading.Thread(target=self.process_message, args=(message,)).start()
-
-    def process_message(self, message):
-        try:
-            response = self.ai.process_message(message)
-            self.add_message("Assistant", response)
-        except Exception as e:
-            self.update_status(f"Error processing message: {str(e)}", "error")
 
     def toggle_voice(self):
         # Toggle voice recognition
