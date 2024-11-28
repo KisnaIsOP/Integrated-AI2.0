@@ -189,7 +189,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📬 Contact
 
 - Created by [@KisnaIsOP](https://github.com/KisnaIsOP)
-- Email: your.email@example.com
+- Email: kisna9191@gmail.com
 
 ---
 <div align="center">
